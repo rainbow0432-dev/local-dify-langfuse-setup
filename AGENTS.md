@@ -354,16 +354,52 @@ uv run chat.py "Hello!"
 
 ---
 
+## NexusCRM Agent
+
+**App ID**: `390bdd58-bc95-44b0-bbc0-304cb7535459`
+**Mode**: agent-chat (function_call strategy)
+**Model**: deepseek-chat via `langgenius/deepseek/deepseek`
+**Tools**: mem0ai plugin (12 tools) + SQLite plugin (7 tools) = 19 total
+**API Key**: stored in `.dify-nexuscrm-credentials`
+**DSL**: `agent/nexuscrm-dsl.yaml`
+**SQLite DB**: plugin_daemon container `/app/storage/data/agent.db`
+**Host path**: `dify-docker/volumes/plugin_daemon/data/`
+**SQLite credentials**: Authorization name `agent-sqlite`, configured via Dify Console UI (Plugins → SQLite → API Key Authorization)
+**Langfuse**: OTel traces from Dify api/worker/plugin_daemon → Langfuse OTLP endpoint
+
+**Key pitfall — SQLite plugin credentials**: The SQLite plugin must be authorized through the Dify Console UI (Plugins page → SQLite → API Key Authorization Configuration). The DB file must also exist in the plugin_daemon container before saving credentials. Creating tools via raw SQL in `app_model_configs.agent_mode.tools` is NOT sufficient — tools must be added through the Console API (`POST /console/api/apps/{id}/model-config`) and then published via the UI. The app's `model_config` must include all 19 tools (12 mem0ai + 7 sqlite) for the runtime agent to see them.
+
+### Design
+
+- **mem0ai plugin** handles semantic memory (customer personality, sentiment, context, insights)
+- **SQLite plugin** handles structured data (accounts, contacts, deals, activities, action_items)
+- **Overlapping heuristic**: call outcomes and deal updates written to both systems
+- Agent system prompt teaches the dual-storage heuristic with specific rules for when to use each plugin
+- Initialized via table creation message (5 tables: accounts, contacts, deals, activities, action_items)
+
+### Spec & Proposal
+
+- Proposal: `proposals.md`
+- Design spec: `docs/superpowers/specs/2026-05-24-nexus-crm-proposal-design.md`
+- Implementation plan: `docs/superpowers/plans/2026-05-24-nexus-crm-implementation.md`
+
+---
+
 ## File Map
 
 ```
 difyapp3/
 ├── .env                          # All credentials and ports
 ├── .dify-credentials             # Dify app API key (DIFY_APP_API_KEY=...)
+├── .dify-nexuscrm-credentials   # NexusCRM app ID + API key
 ├── AGENTS.md                     # This file
+├── proposals.md                  # NexusCRM proposal (mem0ai + SQLite dual storage)
 ├── chat.py                       # Langfuse-traced CLI orchestrator
 ├── pyproject.toml                # uv project config (langfuse, httpx, python-dotenv)
 ├── docker-compose.override.yml   # Overlay: mem0, Qdrant, sqlite-api, Langfuse stack
+├── agent/
+│   ├── nexuscrm-dsl.yaml         # Complete Dify DSL for NexusCRM agent
+│   └── nexuscrm-dsl.json         # DSL in JSON format (reference)
 ├── services/
 │   ├── mem0/
 │   │   └── main.py               # Custom mem0 entrypoint (Qdrant, DeepSeek LLM, Ollama embeddings)
