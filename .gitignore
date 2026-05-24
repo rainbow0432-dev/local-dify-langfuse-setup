@@ -1,0 +1,25 @@
+# Secrets
+.env
+.dify-credentials
+.env.*
+
+# Docker volumes (runtime data)
+dify-docker/volumes/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# uv
+.python-version
+
+# Playwright MCP
+.playwright-mcp/
+
+# Stale screenshots
+*.png
+
+# OS
+.DS_Store
