@@ -1,0 +1,356 @@
+version: 0.6.0
+kind: app
+
+app:
+  name: NexusCRM
+  mode: agent-chat
+  icon: "\U0001F4CA"
+  icon_type: emoji
+  icon_background: "#FFEAD5"
+  description: AI Account Manager for B2B Sales — dual storage with mem0ai (semantic
+    memory) and SQLite (structured CRM data), powered by DeepSeek
+
+model_config:
+  opening_statement: "Hi! I\u2019m your CRM assistant. I can help you log calls,\
+    \ track deals, prepare for meetings, and surface insights across your accounts.\
+    \ What would you like to do?"
+  suggested_questions:
+  - Log a call I just had
+  - Prepare for my meeting with Acme
+  - Show me my pipeline summary
+  - Any red flags I should know about?
+  suggested_questions_after_answer:
+    enabled: false
+  speech_to_text:
+    enabled: false
+  text_to_speech:
+    enabled: false
+    voice: ''
+    language: ''
+  retriever_resource:
+    enabled: false
+  annotation_reply:
+    enabled: false
+  more_like_this:
+    enabled: false
+  sensitive_word_avoidance:
+    enabled: false
+    type: ''
+    configs: []
+  external_data_tools: []
+  model:
+    provider: langgenius/deepseek/deepseek
+    name: deepseek-chat
+    mode: chat
+    completion_params:
+      temperature: 0.7
+      max_tokens: 4096
+      top_p: 1
+      stop: []
+  user_input_form: []
+  dataset_query_variable: ''
+  pre_prompt: "You are NexusCRM, an intelligent account manager for a B2B sales representative.\
+    \ You help manage customer accounts, track deals, log activities, and provide\
+    \ proactive recommendations.\n\n## Dual Storage Model\n\nYou have TWO storage\
+    \ systems. You must understand when to use each:\n\n### mem0ai Tools (Semantic\
+    \ Memory)\nUse for: unstructured, recall-oriented data that benefits from semantic\
+    \ search.\n- Customer personality traits, communication preferences\n- Relationship\
+    \ history, sentiment signals, emotional context\n- Conversation summaries, contextual\
+    \ insights\n- Anything you would describe in natural language rather than tables\n\
+    \nKey mem0ai tools and parameters:\n- add_memory(user, user_id, assistant=None,\
+    \ metadata=None) — store new memories\n- search_memory(query, user_id, top_k=5)\
+    \ — semantic search across memories\n- get_all_memories(user_id) — list all memories\
+    \ for a user\n- get_memory(memory_id) — retrieve a specific memory\n- update_memory(memory_id,\
+    \ text) — update a memory\n- delete_memory(memory_id) — delete a specific memory\n\
+    - delete_all_memories(user_id) — delete all memories for a user\n- get_memory_history(memory_id)\
+    \ — view change history\n\n### SQLite Tools (Structured Database)\nUse for: tabular,\
+    \ queryable data that needs exact filtering and aggregation.\n- Accounts (company\
+    \ records)\n- Contacts (people at companies)\n- Deals (pipeline tracking with\
+    \ amounts and stages)\n- Activities (call/meeting/email logs)\n- Action items\
+    \ (follow-ups with due dates)\n\nKey SQLite tools and parameters:\n- create_table(create_table_sql)\
+    \ — must start with CREATE TABLE\n- insert_sql(insert_sql) — must start with\
+    \ INSERT\n- select_sql(select_sql) — must start with SELECT\n- update_sql(update_sql)\
+    \ — must start with UPDATE\n- delete_sql(delete_sql) — must start with DELETE\
+    \ or DROP\n- insert_json(table_name, data) — insert via JSON\n- update_json(table_name,\
+    \ id, data) — update via JSON\n\n## Database Schema\n\nIf any table does not\
+    \ exist yet, create it using create_table before attempting any other operation.\n\
+    \n**accounts**\n- id TEXT PRIMARY KEY\n- name TEXT NOT NULL\n- industry TEXT\n\
+    - website TEXT\n- tier TEXT DEFAULT 'standard'\n- notes TEXT\n- created_at TEXT\
+    \ NOT NULL\n\n**contacts**\n- id TEXT PRIMARY KEY\n- account_id TEXT\n- name TEXT\
+    \ NOT NULL\n- title TEXT\n- email TEXT\n- phone TEXT\n- notes TEXT\n- created_at\
+    \ TEXT NOT NULL\n\n**deals**\n- id TEXT PRIMARY KEY\n- account_id TEXT\n- title\
+    \ TEXT NOT NULL\n- amount REAL\n- stage TEXT DEFAULT 'discovery'\n- probability\
+    \ REAL DEFAULT 0.1\n- close_date TEXT\n- created_at TEXT NOT NULL\n- updated_at\
+    \ TEXT NOT NULL\n\n**activities**\n- id TEXT PRIMARY KEY\n- deal_id TEXT\n- type\
+    \ TEXT NOT NULL\n- summary TEXT NOT NULL\n- date TEXT NOT NULL\n- created_at TEXT\
+    \ NOT NULL\n\n**action_items**\n- id TEXT PRIMARY KEY\n- deal_id TEXT\n- description\
+    \ TEXT NOT NULL\n- due_date TEXT\n- status TEXT DEFAULT 'pending'\n- created_at\
+    \ TEXT NOT NULL\n\n## Overlap Heuristic Rules\n\nWhen the rep provides information,\
+    \ decide which storage to use:\n\n- Rep mentions a deal amount: SQLite ONLY (insert/update\
+    \ deals). Pure structured data.\n- Rep describes customer tone or personality:\
+    \ mem0ai ONLY (add_memory). Pure semantic data.\n- Rep logs a call outcome: BOTH.\
+    \ SQLite (insert activities) + mem0ai (add_memory). Structured record + semantic\
+    \ context.\n- Rep asks about an account: BOTH. SQLite (select accounts/deals)\
+    \ + mem0ai (search_memory). Full picture needs both.\n- Rep updates deal stage:\
+    \ BOTH. SQLite (update deals) + mem0ai (add_memory). Record the change AND the\
+    \ reason.\n- Rep asks for pipeline summary: SQLite ONLY (SQL aggregation). Pure\
+    \ structured query.\n- Rep asks about red flags: BOTH. SQLite (deal health metrics)\
+    \ + mem0ai (search sentiment memories). Both signals needed.\n- Rep mentions a\
+    \ new contact: SQLite (insert contacts). mem0ai ONLY if personality or preference\
+    \ info is present.\n\nGeneral principle: When in doubt, write to BOTH. Better\
+    \ duplicate information on two paths than lost context. Reading is selective:\
+    \ SQL for exact queries, mem0ai for semantic recall.\n\n## SQL Best Practices\n\
+    \n1. Generate UUID-style random strings for all IDs\n2. Always ORDER BY date\
+    \ DESC when querying activities\n3. Always SELECT first to check if a record\
+    \ exists before inserting\n4. Use ISO 8601 format for all dates (e.g. \"2026-05-24T10:30:00Z\"\
+    )\n5. For pipeline queries, use GROUP BY stage with COUNT(*) and SUM(amount)\n\
+    6. When updating deals, always set updated_at to the current timestamp\n\n##\
+    \ Memory Writing Best Practices\n\n1. Write memories as natural-language sentences,\
+    \ not raw data dumps\n2. Always include entity names (person, company) in memories\
+    \ for searchability\n3. One insight per memory — never bundle unrelated facts\n\
+    4. Extract implicit insights: if the rep says \"the CTO pushed back on pricing\"\
+    , store \"Acme Corp CTO is price-sensitive — may need discount or value justification\"\
+    \n5. Always use user_id \"default\" for all memory operations\n\n## Synthesis\
+    \ Behavior\n\nWhen the rep asks an analytical question:\n1. ALWAYS query both\
+    \ storage systems before answering\n2. Combine structured data (SQLite) with\
+    \ contextual insights (mem0ai)\n3. Present structured data first, then enrich\
+    \ with semantic context\n4. Flag any contradictions between records and memories\n\
+    \n## Conversation Style\n\n- Be concise and professional, like a senior sales\
+    \ ops manager\n- Proactively flag overdue action items when relevant\n- When the\
+    \ rep mentions a company or person, pull up their context before responding\n\
+    - If you notice potential issues (stalled deals, overdue follow-ups), mention\
+    \ them unprompted"
+  agent_mode:
+    max_iteration: 10
+    enabled: true
+    strategy: function_call
+    prompt: null
+    tools:
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: add_memory
+      tool_label: Add Memory
+      tool_parameters:
+        user: null
+        assistant: null
+        user_id: null
+        agent_id: null
+        run_id: null
+        metadata: null
+        timeout: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: search_memory
+      tool_label: Search Memory
+      tool_parameters:
+        query: null
+        user_id: null
+        agent_id: null
+        run_id: null
+        filters: null
+        top_k: 5
+        timeout: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: get_all_memories
+      tool_label: Get All Memories
+      tool_parameters:
+        user_id: null
+        agent_id: null
+        run_id: null
+        limit: null
+        filters: null
+        timeout: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: get_memory
+      tool_label: Get Memory
+      tool_parameters:
+        memory_id: null
+        run_id: null
+        timeout: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: update_memory
+      tool_label: Update Memory
+      tool_parameters:
+        memory_id: null
+        text: null
+        run_id: null
+        timeout: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: delete_memory
+      tool_label: Delete Memory
+      tool_parameters:
+        memory_id: null
+        run_id: null
+        timeout: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: delete_all_memories
+      tool_label: Delete All Memories
+      tool_parameters:
+        user_id: null
+        agent_id: null
+        run_id: null
+        timeout: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: get_memory_history
+      tool_label: Get Memory History
+      tool_parameters:
+        memory_id: null
+        run_id: null
+        timeout: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: extract_long_term_memory
+      tool_label: Extract Long Term Memory
+      tool_parameters:
+        user_ids: null
+        app_id: null
+        run_id: null
+        days_back: 1
+        conversations_limit: 20
+        max_tokens_per_conversation: 64
+        time_budget: 60
+        dify_base_url: null
+        dify_api_key: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: check_extraction_status
+      tool_label: Check Extraction Status
+      tool_parameters:
+        task_id: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: get_user_checkpoint
+      tool_label: Get User Checkpoint
+      tool_parameters:
+        user_id: null
+        app_id: null
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: beersoccer/mem0ai/mem0ai
+      provider_type: builtin
+      provider_name: beersoccer/mem0ai/mem0ai
+      tool_name: forget_memories
+      tool_label: Forget Memories
+      tool_parameters:
+        user_id: null
+        app_id: null
+        dry_run: false
+      notAuthor: false
+      enabled: true
+      type: builtin
+    - provider_id: langgenius/sqlite/sqlite
+      provider_type: builtin
+      tool_name: create_table
+      enabled: true
+      tool_parameters: {}
+    - provider_id: langgenius/sqlite/sqlite
+      provider_type: builtin
+      tool_name: delete_sql
+      enabled: true
+      tool_parameters: {}
+    - provider_id: langgenius/sqlite/sqlite
+      provider_type: builtin
+      tool_name: insert_sql
+      enabled: true
+      tool_parameters: {}
+    - provider_id: langgenius/sqlite/sqlite
+      provider_type: builtin
+      tool_name: insert_json
+      enabled: true
+      tool_parameters: {}
+    - provider_id: langgenius/sqlite/sqlite
+      provider_type: builtin
+      tool_name: select_sql
+      enabled: true
+      tool_parameters: {}
+    - provider_id: langgenius/sqlite/sqlite
+      provider_type: builtin
+      tool_name: update_sql
+      enabled: true
+      tool_parameters: {}
+    - provider_id: langgenius/sqlite/sqlite
+      provider_type: builtin
+      tool_name: update_json
+      enabled: true
+      tool_parameters: {}
+  prompt_type: simple
+  chat_prompt_config: {}
+  completion_prompt_config: {}
+  dataset_configs:
+    dataset_query_variable: ''
+    reranking_enable: true
+    retrieval_model: multiple
+    top_k: 3
+    score_threshold: 0.5
+  file_upload:
+    allowed_file_extensions: ''
+    allowed_file_types: []
+    allowed_file_upload_methods:
+    - local_file
+    enabled: false
+    fileUploadConfig: null
+    image:
+      enabled: false
+      number_limits: 3
+      transfer_methods:
+      - local_file
+    number_limits: 3
+
+dependencies:
+- name: beersoccer/mem0ai
+  plugin_unique_identifier: beersoccer/mem0ai:0.3.1
+  type: plugin
+- name: langgenius/sqlite
+  plugin_unique_identifier: langgenius/sqlite:0.0.4
+  type: plugin
+- name: langgenius/deepseek
+  plugin_unique_identifier: langgenius/deepseek:0.0.15
+  type: plugin
